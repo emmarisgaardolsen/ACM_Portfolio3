@@ -13,6 +13,8 @@ df <- read_csv("data/sc_df_clean.csv")
 Some trials does not get feedback (NAs) - they are a group in themselves.
 Some of the feedbacks are 0s - they needs to be fixed.
 
+
+
 ```{r}
 bias <- seq(0, length(df$FirstRating), 1)
 w1 <- 0.5
