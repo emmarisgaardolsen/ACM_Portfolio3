@@ -7,7 +7,7 @@ date: "2024-03-22"
 # Assignment 3: Multilevel modelling
 
 ```{r setup}
-pacman::p_load(tidyverse, cmdstanr, brms, pandoc, rmarkdown)
+pacman::p_load(tidyverse, cmdstanr, brms)
 ```
 
 ## Introduction
@@ -518,6 +518,4 @@ plt4
 # save to drive
 ggsave("figures/Density_WB_real.png", plt4, width = 10, height = 10)
 ```
-
-
 
