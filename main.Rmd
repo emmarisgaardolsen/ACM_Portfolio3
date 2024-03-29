@@ -1,110 +1,523 @@
+---
+title: "ACM_3"
+output: html_document
+date: "2024-03-22"
+---
+
 # Assignment 3: Multilevel modelling
 
 ```{r setup}
-pacman::p_load(tidyverse, cmdstanr, brms)
+pacman::p_load(tidyverse, cmdstanr, brms, pandoc, rmarkdown)
 ```
 
+## Introduction
+
+**Experiment description**
+The data comes from the social conformity experiment where a participant is asked to rate the trustworthiness of a face. Immediately after having given a rating, the participant is then shown the ratings of the same face by a group of people. After an hour, the participant is asked to rate the face again. The experiment is repeated for a number of faces. The data is collected from cognitive science students during the pandemic.
 
 ```{r data}
+# Data from cogsci students during the pandemic
 df <- read_csv("data/sc_df_clean.csv")
 
 # fixing error in the data (some trials does not get feedback)
 ```
+
+**Data description**
+The data comes from the social conformity experiment (https://pubmed.ncbi.nlm.nih.gov/30700729/), where cogsci students combine their own intuition of trustworthiness of given faces to social information.
+
+The important variables in the data are the following:
+
+| Variable | Description |
+|----------|----------|
+| FaceID        | Number representing faces [INT]     |
+| FirstRating   | Initial trustworthiness rating given by participant [INT]    |
+| GroupRating   | Mean trustworthiness rating given by group [INT]    |
+| SecondRating  | Second trustworthiness rating given by participant [INT]    |
+| Feedback      | Difference between first rating and group rating [INT]    |
+| Change        | Difference between first and second rating by participant [INT]    |
+
+**Extra OBS**
 Some trials does not get feedback (NAs) - they are a group in themselves.
 Some of the feedbacks are 0s - they needs to be fixed.
-
-
-
-```{r}
-bias <- seq(0, length(df$FirstRating), 1)
-w1 <- 0.5
-w2 <- 0.5
-
-WeightedBayes_f <- function(bias, Source1, Source2, w1, w2){
-    w1 <- (w1 - 0.5)*2
-    w2 <- (w2 - 0.5)*2
-    # Define or load the inv_logit_scaled and logit_scaled functions here
-    outcome <- inv_logit_scaled(bias + w1 * logit_scaled(Source1) + w2 * logit_scaled(Source2)) 
-    return(outcome)
-}
-
-for (i in seq(nrow(df))) {
-    outcome <- WeightedBayes_f(bias, df$FirstRating, df$SecondRating, w1, w2)
-    df$sim_outsome <- outcome
-}
-
-for 
-
-
-view(df)
-```
-
-```{r}
-
-outcome <- WeightedBayes_f(bias, df$FirstRating, df$SecondRating, w1, w2)
-
-df$sim_outsome <- outcome
-
-```
-
-```{r}
-
-simpleBayes_f <- function(bias, Source1, Source2){
-    outcome <- inv_logit_scaled(bias + logit_scaled(Source1) + logit_scaled(Source2)) 
-    return(outcome)
-}
-
-
-
-bias <- 0
-Source1 <- seq(0.1,0.9, 0.1) 
-Source2<- seq(0.1,0.9, 0.1) 
-w1 <- seq(0.5, 1, 0.1)
-w2 <- seq(0.5, 1, 0.1)
-
-db <- expand.grid(bias = bias, Source1 = Source1, Source2 = Source2, w1 = w1, w2 = w2)
-
-for (n in seq(nrow(db))) {
-    db$belief[n] <- WeightedBayes_f(db$bias [n], db$Source1[n], db$Source2 [n], db$w1[n], db$w2 [n]) 
-    db$binary[n] <- rbinom(1,1, db$belief [n])
-}
-
-
-```
-
-```{r}
-
-```
 
 Possible effect and limitations of the model:
 If you rate someone as being 5, and group does the same, you are more likely to rate the person as 5 or higher the next time, because a majority of people rate x person as being above average trustworthy.
 The choices of trustworthiness are not independent of each other, but are influenced by the group rating. 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-```{r}
-trials <- 150
-
-for i in seq(trials) {
-    source1 = rnorm(1, 0.5, 0.1)
+# Two agents: Simple and weighted Bayes
+```{r agents}
+# Function to make sure the denominator is never 0 (which produces NaN since you can't divide by 0.
+logit_scaled <- function(p) {
+  log(p / (1 - p + 1e-9))
 }
 
-plot(rnorm(1, 0.5, 0.1))
+simpleBayes_f <- function(bias, Source1, Source2){
+    outcome <- inv_logit_scaled(bias + logit_scaled(Source1 / 8) + logit_scaled(Source2 / 8)) # dividing by 8 to scale the ratings to 0-1 (probability scale)
+    return(outcome)
+}
+
+WeightedBayes_f <- function(bias, Source1, Source2, w1, w2){
+    w1 <- (w1 - 0.5)*2
+    w2 <- (w2 - 0.5)*2
+    
+    # Define or load the inv_logit_scaled and logit_scaled functions here
+    outcome <- inv_logit_scaled(bias + w1 * logit_scaled(Source1 / 8) + w2 * logit_scaled(Source2 / 8)) # 
+    return(outcome)
+}
+```
+
+# Creating simple data
+```{r simulating simple data}
+trials <- 150
+participants <- 20
+ratings <- 1:8 # the participants can rate the faces from 1 to 8
+w1 <- .5 # the weight for own rating
+w2 <- .7 # the weight for group rating
+bias <- 0 # assuming no bias
+feedback <- c(-3, -2 ,0 ,2, 3) # the group rating is randomly chosen from this vector and subtracted from the first rating
+
+sim_data <- tibble()
+
+for (participant in seq(participants)){ # for each participant
+    for (i in seq(trials)) { # for each trial
+        sim_data <- rbind(sim_data, tibble(
+            participant = participant,
+            FaceID = i,
+            FirstRating = sample(ratings, 1, prob = c(0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.7, 0.4)),
+            GroupRating = pmax(1, pmin(8, FirstRating + (sample(feedback, 1)))), # pmin / pmax ensures that the group rating is within 1-8
+            # add feedback saying if how much higher or lower the group rating is compared to the first rating
+            feedback = GroupRating - FirstRating      
+        ))
+    }
+}
+sim_data$w1 <- w1
+sim_data$w2 <- w2
+sim_data$bias <- bias
+```
+
+# Simulating data from 1) simple bayes model
+```{r simulate data from simple bayes model}
+# Simple Bayes second rating (after having seen the group rating)
+for (participant in seq(participants)){ # for each participant
+    for (i in seq(trials)) { # for each trial
+        sim_data <- sim_data %>% 
+            mutate(SecondRating_belief_SB = simpleBayes_f(bias, FirstRating, GroupRating)) %>% # SB = simple bayes
+            mutate(SB_binary_rating = ifelse(SecondRating_belief_SB > 0.5, 1, 0)) %>% # binary rating (either trustworthiness or not) Alternativ: rbinom(1,1,SB_binary_rating)
+            mutate(SB_number_rating = round(SecondRating_belief_SB * 8)) # number rating (1-8)
+    }
+}
+```
+
+# Simulating data from 2) weighted bayes model
+```{r simulating data from weighted bayes model}
+# Weighted Bayes second rating (after having seen the group rating)
+for (participant in seq(participants)){ # for each participant
+    for (i in seq(trials)) { # for each trial
+        sim_data <- sim_data %>% 
+            mutate(SecondRating_belief_WB = WeightedBayes_f(bias, FirstRating, GroupRating, w1, w2)) %>% # WB = weighted bayes
+            mutate(WB_binary_rating = ifelse(SecondRating_belief_WB > 0.5, 1, 0)) %>% # binary rating (either trustworthiness or not) Alternativ: rbinom(1,1,WB_binary_rating)
+            mutate(WB_number_rating = round(SecondRating_belief_WB * 8)) # number rating (1-8)
+    }
+}
+```
+
+# plotting the second choices for both models
+```{r}
+pacman::p_load(gridExtra)
+
+plt1 <- ggplot(sim_data, aes(SecondRating_belief_SB)) +
+    geom_histogram(bins = 10, alpha = 0.2, color = "black") +
+    labs(title = "Simple Bayes model",
+         x = "Second rating",
+         y = "Frequency")
+    theme_bw()
+
+plt2 <- ggplot(sim_data, aes(SecondRating_belief_WB)) +
+    geom_histogram(bins = 10, alpha = 0.2, color = "black") +
+    theme_bw() +
+    labs(title = "Simple Bayes model",
+         x = "Second rating",
+         y = "Frequency")
+
+pl3 <- ggplot(sim_data, aes(FirstRating, SecondRating_belief_SB, color = GroupRating, group = GroupRating)) +
+    geom_line() + 
+    labs(title = "Simple Bayes model",
+         x = "First rating",
+         y = "Second rating") +
+    theme_bw()
+
+plt4 <- ggplot(sim_data, aes(FirstRating, SecondRating_belief_WB, color = GroupRating, group = GroupRating)) +
+    geom_line() + 
+    labs(title = "Weighted Bayes model",
+         x = "First rating",
+         y = "Second rating") +
+    theme_bw()
+
+grid.arrange(plt1, plt2, pl3, plt4, ncol = 2, nrow = 2)
+plt5 <- grid.arrange(plt1, plt2, pl3, plt4, ncol = 2, nrow = 2)
+
+
+# save to drive
+ggsave("figures/SecondChoice_Sim_Data.png", plt5, width = 10, height = 10)
+```
+
+Question:
+Why are the lines not going from 0-8?
+What is wrong with the WB model plot?
+
+# STAN modelling of SB model
+```{r}
+file <- file.path("stan_models/SB_model.stan")
+
+SB_mod <- cmdstan_model(file, cpp_options = list(stan_threads = TRUE), stanc_options = list("O1"), pedantic = TRUE)
+```
+
+# Applying the SB model to the simulated data
+
+Preparing data
+```{r preparing data}
+stan_data <- list(
+    N = nrow(sim_data),
+    Source1 = sim_data$FirstRating/8, # dividing by 8 to scale the ratings to 0-1 (probability scale)
+    Source2 = sim_data$GroupRating/8, # dividing by 8 to scale the ratings to 0-1 (probability scale)
+    w1 = sim_data$w1,
+    w2 = sim_data$w2,
+    bias = sim_data$bias,
+    y = sim_data$SB_binary_rating
+)
 ```
 
 ```{r}
+view(sim_data)
 ```
+
+Fitting SB model
+```{r}
+SB_fit <- SB_mod$sample(
+    data = stan_data,
+    seed = 123,
+    chains = 2,
+    parallel_chains = 2,
+    threads_per_chain = 2,
+    iter_warmup = 2000,
+    iter_sampling = 2000,
+    refresh = 1000,
+    max_treedepth = 20, 
+    adapt_delta = 0.99 
+    )
+```
+
+Assessing SB fit 
+```{r}
+SB_fit$summary()
+
+SB_fit$cmdstan_diagnose()
+
+SB_fit$loo()
+```
+
+Plotting SB fit 
+```{r}
+# Extracting draws
+draws_SB <- as_draws_df(SB_fit$draws())
+
+# plotting markov chains for bias
+plt1 <- ggplot(draws_SB, aes(.iteration, bias, group = .chain, color = .chain)) +
+  geom_line(alpha = 0.5) +
+  labs(title = "Markov chains for bias",
+       x = "Iteration",
+       y = "Bias") +
+  theme_classic()
+
+# plotting density of bias, prior and posterior
+plt2 <- ggplot(draws_SB) +
+  geom_density(aes(bias, fill = "Posterior"), alpha = 0.9) +
+  geom_density(aes(bias_prior, fill = "Prior"), alpha = 0.9) +
+  geom_vline(xintercept = sim_data$bias[1]) + # true value of bias
+  theme_bw() +
+  labs(title = "Bias posterior and prior",
+       x = "Bias",
+       y = "Density")
+
+plt3 <- grid.arrange(plt1, plt2, nrow = 2)
+plt3
+
+# save to drive
+ggsave("figures/MarkovChains_and_density_SB.png", plt3, width = 10, height = 10)
+```
+
+# Applying the WB model to the simulated data
+```{r}
+file <- file.path("stan_models/WB_model.stan")
+
+WB_mod <- cmdstan_model(file, cpp_options = list(stan_threads = TRUE), stanc_options = list("O1"), pedantic = TRUE)
+```
+
+Fitting model
+```{r}
+WB_fit <- WB_mod$sample(
+    data = stan_data,
+    seed = 123,
+    chains = 2,
+    parallel_chains = 2,
+    threads_per_chain = 2,
+    iter_warmup = 2000,
+    iter_sampling = 2000,
+    refresh = 1000,
+    max_treedepth = 20, 
+    adapt_delta = 0.99 
+    )
+```
+
+Assessing WB fit
+```{r}
+WB_fit$summary()
+
+WB_fit$cmdstan_diagnose()
+
+WB_fit$loo()
+```
+
+Plotting WB fit
+```{r}
+# Extracting draws
+draws_WB <- as_draws_df(WB_fit$draws())
+
+# plotting markov chains for bias
+plt1 <- ggplot(draws_WB, aes(.iteration, bias, group = .chain, color = .chain)) +
+  geom_line(alpha = 0.5) +
+  labs(title = "Markov chains for bias",
+       x = "Iteration",
+       y = "Bias") +
+  theme_classic()
+
+plt2 <- ggplot(draws_WB, aes(.iteration, w1, group = .chain, color = .chain)) +
+    geom_line(alpha = 0.5) +
+    labs(title = "Markov chains for w1",
+         x = "Iteration",
+         y = "w1") +
+    theme_classic()
+
+plt3 <- ggplot(draws_WB, aes(.iteration, w2, group = .chain, color = .chain)) +
+    geom_line(alpha = 0.5) +
+    labs(title = "Markov chains for w2",
+         x = "Iteration",
+         y = "w2") +
+    theme_classic()
+
+plt4 <- grid.arrange(plt1, plt2, plt3, nrow = 3)
+plt4
+
+# save to drive
+ggsave("figures/MarkovChains_WB.png", plt4, width = 10, height = 10)
+```
+
+Plotting density of bias, w1, w2: prior and posterior
+```{r}
+plt1 <- ggplot(draws_WB) +
+  geom_density(aes(bias, fill = "Posterior"), alpha = 0.9) +
+  geom_density(aes(bias_prior, fill = "Prior"), alpha = 0.9) +
+  geom_vline(xintercept = sim_data$bias[1]) + # true value of bias
+  theme_bw() +
+  labs(title = "Bias posterior and prior",
+       x = "Bias",
+       y = "Density")
+
+plt2 <- ggplot(draws_WB) +
+    geom_density(aes(w1, fill = "Posterior"), alpha = 0.9) +
+    geom_density(aes(w1_prior, fill = "Prior"), alpha = 0.9) +
+    geom_vline(xintercept = sim_data$w1[1]) + # true value of bias
+    theme_bw() +
+    labs(title = "w1 posterior and prior",
+         x = "w1",
+         y = "Density")
+
+plt3 <- ggplot(draws_WB) +
+    geom_density(aes(w2, fill = "Posterior"), alpha = 0.9) +
+    geom_density(aes(w2_prior, fill = "Prior"), alpha = 0.9) +
+    geom_vline(xintercept = sim_data$w2[1]) + # true value of bias
+    theme_bw() +
+    labs(title = "w2 posterior and prior",
+         x = "w2",
+         y = "Density")
+        
+plt4 <- grid.arrange(plt1, plt2, plt3, nrow = 3)
+plt4
+
+# save to drive
+ggsave("figures/Density_WB.png", plt4, width = 10, height = 10)
+```
+
+Question: 
+Why is the posterior for bias so off???? Despite the fact that the markov chain looks alright...?
+
+
+# Fitting model on actual cogsci data wuhu
+
+Preparing data
+```{r}
+df$Second_rating_binary <- ifelse(df$SecondRating > 4, 1, 0) # binary rating (either trustworthiness or not)
+df <- df %>% filter(GroupRating != 0) # cleaning up data (jvf. Riccardos comment on class)
+
+stan_data_real <- list(
+    N = nrow(df),
+    Source1 = pmin(pmax(df$FirstRating / 8, 0.01), 0.99), # Avoiding exact 0/1
+    Source2 = pmin(pmax(df$GroupRating / 8, 0.01), 0.99), # Avoiding exact 0/1
+    y = df$Second_rating_binary
+)
+
+```
+
+Fitting to SB model
+```{r}
+SB_fit <- SB_mod$sample(
+    data = stan_data_real,
+    seed = 123,
+    chains = 2,
+    parallel_chains = 2,
+    threads_per_chain = 2,
+    iter_warmup = 2000,
+    iter_sampling = 2000,
+    refresh = 1000,
+    max_treedepth = 20, 
+    adapt_delta = 0.99 
+    )
+```
+
+Assessing SB fit
+```{r}
+SB_fit$summary()
+
+SB_fit$cmdstan_diagnose()
+
+SB_fit$loo()
+```
+
+Plotting SB fit
+```{r}
+# Extracting draws
+draws_SB_real <- as_draws_df(SB_fit$draws())
+
+# plotting markov chains for bias
+plt1 <- ggplot(draws_SB_real, aes(.iteration, bias, group = .chain, color = .chain)) +
+  geom_line(alpha = 0.5) +
+  labs(title = "Markov chains for bias",
+       x = "Iteration",
+       y = "Bias") +
+  theme_classic()
+
+# plotting density of bias, prior and posterior
+plt2 <- ggplot(draws_SB_real) +
+  geom_density(aes(bias, fill = "Posterior"), alpha = 0.9) +
+  geom_density(aes(bias_prior, fill = "Prior"), alpha = 0.9) +
+  geom_vline(xintercept = 0) + # true value of bias
+  theme_bw() +
+  labs(title = "Bias posterior and prior",
+       x = "Bias",
+       y = "Density")
+
+plt3 <- grid.arrange(plt1, plt2, nrow = 2)
+plt3
+
+# save to drive
+ggsave("figures/MarkovChains_and_density_SB_real.png", plt3, width = 10, height = 10)
+```
+
+Fitting to WB model
+```{r}
+WB_fit_real <- WB_mod$sample(
+    data = stan_data_real,
+    seed = 123,
+    chains = 2,
+    parallel_chains = 2,
+    threads_per_chain = 2,
+    iter_warmup = 2000,
+    iter_sampling = 2000,
+    refresh = 1000,
+    max_treedepth = 20, 
+    adapt_delta = 0.99 
+    )
+```
+
+Assessing WB fit
+```{r}
+WB_fit_real$summary()
+
+WB_fit_real$cmdstan_diagnose()
+
+WB_fit_real$loo()
+```
+
+Plotting WB fit
+```{r}
+# Extracting draws
+draws_WB_real <- as_draws_df(WB_fit_real$draws())
+
+# plotting markov chains for bias
+plt1 <- ggplot(draws_WB_real, aes(.iteration, bias, group = .chain, color = .chain)) +
+  geom_line(alpha = 0.5) +
+  labs(title = "Markov chains for bias",
+       x = "Iteration",
+       y = "Bias") +
+  theme_classic()
+
+plt2 <- ggplot(draws_WB_real, aes(.iteration, w1, group = .chain, color = .chain)) +
+    geom_line(alpha = 0.5) +
+    labs(title = "Markov chains for w1",
+         x = "Iteration",
+         y = "w1") +
+    theme_classic()
+
+plt3 <- ggplot(draws_WB_real, aes(.iteration, w2, group = .chain, color = .chain)) +
+    geom_line(alpha = 0.5) +
+    labs(title = "Markov chains for w2",
+         x = "Iteration",
+         y = "w2") +
+    theme_classic()
+
+plt4 <- grid.arrange(plt1, plt2, plt3, nrow = 3)
+plt4
+
+# save to drive
+ggsave("figures/MarkovChains_WB_real.png", plt4, width = 10, height = 10)
+
+```
+
+Plotting density of bias, w1, w2: prior and posterior
+```{r}
+plt1 <- ggplot(draws_WB_real) +
+  geom_density(aes(bias, fill = "Posterior"), alpha = 0.9) +
+  geom_density(aes(bias_prior, fill = "Prior"), alpha = 0.9) +
+  geom_vline(xintercept = 0) + # true value of bias
+  theme_bw() +
+  labs(title = "Bias posterior and prior",
+       x = "Bias",
+       y = "Density")
+
+plt2 <- ggplot(draws_WB_real) +
+    geom_density(aes(w1, fill = "Posterior"), alpha = 0.9) +
+    geom_density(aes(w1_prior, fill = "Prior"), alpha = 0.9) +
+    geom_vline(xintercept = 0.5) + # true value of bias
+    theme_bw() +
+    labs(title = "w1 posterior and prior",
+         x = "w1",
+         y = "Density")
+
+plt3 <- ggplot(draws_WB_real) +
+    geom_density(aes(w2, fill = "Posterior"), alpha = 0.9) +
+    geom_density(aes(w2_prior, fill = "Prior"), alpha = 0.9) +
+    geom_vline(xintercept = 0.7) + # true value of bias
+    theme_bw() +
+    labs(title = "w2 posterior and prior",
+         x = "w2",
+         y = "Density")
+
+plt4 <- grid.arrange(plt1, plt2, plt3, nrow = 3)
+plt4
+
+# save to drive
+ggsave("figures/Density_WB_real.png", plt4, width = 10, height = 10)
+```
+
+
+
