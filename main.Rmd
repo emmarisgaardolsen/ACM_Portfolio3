@@ -187,10 +187,6 @@ stan_data <- list(
 )
 ```
 
-```{r}
-view(sim_data)
-```
-
 Fitting SB model
 ```{r}
 SB_fit <- SB_mod$sample(
@@ -240,7 +236,6 @@ plt2 <- ggplot(draws_SB) +
        y = "Density")
 
 plt3 <- grid.arrange(plt1, plt2, nrow = 2)
-plt3
 
 # save to drive
 ggsave("figures/MarkovChains_and_density_SB.png", plt3, width = 10, height = 10)
@@ -306,10 +301,10 @@ plt3 <- ggplot(draws_WB, aes(.iteration, w2, group = .chain, color = .chain)) +
     theme_classic()
 
 plt4 <- grid.arrange(plt1, plt2, plt3, nrow = 3)
-plt4
+
 
 # save to drive
-ggsave("figures/MarkovChains_WB.png", plt4, width = 10, height = 10)
+ggsave("figures/MarkovChains_WB_sim_data.png", plt4, width = 10, height = 10)
 ```
 
 Plotting density of bias, w1, w2: prior and posterior
@@ -342,14 +337,14 @@ plt3 <- ggplot(draws_WB) +
          y = "Density")
         
 plt4 <- grid.arrange(plt1, plt2, plt3, nrow = 3)
-plt4
+
 
 # save to drive
-ggsave("figures/Density_WB.png", plt4, width = 10, height = 10)
+ggsave("figures/Density_WB_sim_data.png", plt4, width = 10, height = 10)
 ```
 
 Question: 
-Why is the posterior for bias so off???? Despite the fact that the markov chain looks alright...?
+Postior is extremely off for w1 and w2. Look into this.
 
 
 # Fitting model on actual cogsci data wuhu
@@ -417,10 +412,9 @@ plt2 <- ggplot(draws_SB_real) +
        y = "Density")
 
 plt3 <- grid.arrange(plt1, plt2, nrow = 2)
-plt3
 
 # save to drive
-ggsave("figures/MarkovChains_and_density_SB_real.png", plt3, width = 10, height = 10)
+ggsave("figures/MarkovChains_and_density_SB_real_data.png", plt3, width = 10, height = 10)
 ```
 
 Fitting to WB model
@@ -476,10 +470,9 @@ plt3 <- ggplot(draws_WB_real, aes(.iteration, w2, group = .chain, color = .chain
     theme_classic()
 
 plt4 <- grid.arrange(plt1, plt2, plt3, nrow = 3)
-plt4
 
 # save to drive
-ggsave("figures/MarkovChains_WB_real.png", plt4, width = 10, height = 10)
+ggsave("figures/MarkovChains_WB_real_data.png", plt4, width = 10, height = 10)
 
 ```
 
@@ -513,9 +506,9 @@ plt3 <- ggplot(draws_WB_real) +
          y = "Density")
 
 plt4 <- grid.arrange(plt1, plt2, plt3, nrow = 3)
-plt4
 
 # save to drive
-ggsave("figures/Density_WB_real.png", plt4, width = 10, height = 10)
+ggsave("figures/Density_WB_real_data.png", plt4, width = 10, height = 10)
 ```
 
+Question: Postior is extremely off for w1 and w2. Look into this.
