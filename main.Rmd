@@ -128,6 +128,7 @@ pacman::p_load(gridExtra)
 plt1 <- ggplot(sim_data, aes(SecondRating_belief_SB)) +
     geom_histogram(bins = 10, alpha = 0.2, color = "black") +
     labs(title = "Simple Bayes model",
+            subtitle = "on simulated data",
          x = "Second rating",
          y = "Frequency")
     theme_bw()
@@ -136,12 +137,14 @@ plt2 <- ggplot(sim_data, aes(SecondRating_belief_WB)) +
     geom_histogram(bins = 10, alpha = 0.2, color = "black") +
     theme_bw() +
     labs(title = "Simple Bayes model",
+            subtitle = "on simulated data",
          x = "Second rating",
          y = "Frequency")
 
 pl3 <- ggplot(sim_data, aes(FirstRating, SecondRating_belief_SB, color = GroupRating, group = GroupRating)) +
     geom_line() + 
     labs(title = "Simple Bayes model",
+            subtitle = "on simulated data",
          x = "First rating",
          y = "Second rating") +
     theme_bw()
@@ -149,6 +152,7 @@ pl3 <- ggplot(sim_data, aes(FirstRating, SecondRating_belief_SB, color = GroupRa
 plt4 <- ggplot(sim_data, aes(FirstRating, SecondRating_belief_WB, color = GroupRating, group = GroupRating)) +
     geom_line() + 
     labs(title = "Weighted Bayes model",
+         subtitle = "on simulated data",
          x = "First rating",
          y = "Second rating") +
     theme_bw()
@@ -220,7 +224,8 @@ draws_SB <- as_draws_df(SB_fit$draws())
 # plotting markov chains for bias
 plt1 <- ggplot(draws_SB, aes(.iteration, bias, group = .chain, color = .chain)) +
   geom_line(alpha = 0.5) +
-  labs(title = "Markov chains for bias",
+  labs(title = "Markov chains for bias (SB model)",
+        subtitle = "on simulated data",
        x = "Iteration",
        y = "Bias") +
   theme_classic()
@@ -231,7 +236,8 @@ plt2 <- ggplot(draws_SB) +
   geom_density(aes(bias_prior, fill = "Prior"), alpha = 0.9) +
   geom_vline(xintercept = sim_data$bias[1]) + # true value of bias
   theme_bw() +
-  labs(title = "Bias posterior and prior",
+  labs(title = "Bias posterior and prior (SB model)",
+        subtitle = "on simulated data",
        x = "Bias",
        y = "Density")
 
@@ -281,21 +287,24 @@ draws_WB <- as_draws_df(WB_fit$draws())
 # plotting markov chains for bias
 plt1 <- ggplot(draws_WB, aes(.iteration, bias, group = .chain, color = .chain)) +
   geom_line(alpha = 0.5) +
-  labs(title = "Markov chains for bias",
+  labs(title = "Markov chains for bias (WB model)",
+        subtitle = "on simulated data",
        x = "Iteration",
        y = "Bias") +
   theme_classic()
 
 plt2 <- ggplot(draws_WB, aes(.iteration, w1, group = .chain, color = .chain)) +
     geom_line(alpha = 0.5) +
-    labs(title = "Markov chains for w1",
+    labs(title = "Markov chains for w1 (WB model)",
+            subtitle = "on simulated data",
          x = "Iteration",
          y = "w1") +
     theme_classic()
 
 plt3 <- ggplot(draws_WB, aes(.iteration, w2, group = .chain, color = .chain)) +
     geom_line(alpha = 0.5) +
-    labs(title = "Markov chains for w2",
+    labs(title = "Markov chains for w2 (WB model)",
+            subtitle = "on simulated data",
          x = "Iteration",
          y = "w2") +
     theme_classic()
@@ -307,6 +316,8 @@ plt4 <- grid.arrange(plt1, plt2, plt3, nrow = 3)
 ggsave("figures/MarkovChains_WB_sim_data.png", plt4, width = 10, height = 10)
 ```
 
+**Markov chains for W1 and W2 looks odd. Look into this**
+
 Plotting density of bias, w1, w2: prior and posterior
 ```{r}
 plt1 <- ggplot(draws_WB) +
@@ -314,7 +325,8 @@ plt1 <- ggplot(draws_WB) +
   geom_density(aes(bias_prior, fill = "Prior"), alpha = 0.9) +
   geom_vline(xintercept = sim_data$bias[1]) + # true value of bias
   theme_bw() +
-  labs(title = "Bias posterior and prior",
+  labs(title = "Bias posterior and prior (WB model)",
+        subtitle = "on simulated data",
        x = "Bias",
        y = "Density")
 
@@ -323,7 +335,8 @@ plt2 <- ggplot(draws_WB) +
     geom_density(aes(w1_prior, fill = "Prior"), alpha = 0.9) +
     geom_vline(xintercept = sim_data$w1[1]) + # true value of bias
     theme_bw() +
-    labs(title = "w1 posterior and prior",
+    labs(title = "w1 posterior and prior (WB model)",
+        subtitle = "on simulated data",
          x = "w1",
          y = "Density")
 
@@ -332,7 +345,8 @@ plt3 <- ggplot(draws_WB) +
     geom_density(aes(w2_prior, fill = "Prior"), alpha = 0.9) +
     geom_vline(xintercept = sim_data$w2[1]) + # true value of bias
     theme_bw() +
-    labs(title = "w2 posterior and prior",
+    labs(title = "w2 posterior and prior (WB model)",
+        subtitle = "on simulated data",
          x = "w2",
          y = "Density")
         
@@ -396,7 +410,8 @@ draws_SB_real <- as_draws_df(SB_fit$draws())
 # plotting markov chains for bias
 plt1 <- ggplot(draws_SB_real, aes(.iteration, bias, group = .chain, color = .chain)) +
   geom_line(alpha = 0.5) +
-  labs(title = "Markov chains for bias",
+  labs(title = "Markov chains for bias (SB model)",
+        subtitle = "on real data",
        x = "Iteration",
        y = "Bias") +
   theme_classic()
@@ -407,7 +422,8 @@ plt2 <- ggplot(draws_SB_real) +
   geom_density(aes(bias_prior, fill = "Prior"), alpha = 0.9) +
   geom_vline(xintercept = 0) + # true value of bias
   theme_bw() +
-  labs(title = "Bias posterior and prior",
+  labs(title = "Bias posterior and prior (SB model)",
+        subtitle = "on real data",
        x = "Bias",
        y = "Density")
 
@@ -450,21 +466,24 @@ draws_WB_real <- as_draws_df(WB_fit_real$draws())
 # plotting markov chains for bias
 plt1 <- ggplot(draws_WB_real, aes(.iteration, bias, group = .chain, color = .chain)) +
   geom_line(alpha = 0.5) +
-  labs(title = "Markov chains for bias",
+  labs(title = "Markov chains for bias (WB model)",
+        subtitle = "on real data",
        x = "Iteration",
        y = "Bias") +
   theme_classic()
 
 plt2 <- ggplot(draws_WB_real, aes(.iteration, w1, group = .chain, color = .chain)) +
     geom_line(alpha = 0.5) +
-    labs(title = "Markov chains for w1",
+    labs(title = "Markov chains for w1 (WB model)",
+            subtitle = "on real data",
          x = "Iteration",
          y = "w1") +
     theme_classic()
 
 plt3 <- ggplot(draws_WB_real, aes(.iteration, w2, group = .chain, color = .chain)) +
     geom_line(alpha = 0.5) +
-    labs(title = "Markov chains for w2",
+    labs(title = "Markov chains for w2 (WB model)",
+            subtitle = "on real data",
          x = "Iteration",
          y = "w2") +
     theme_classic()
@@ -483,7 +502,8 @@ plt1 <- ggplot(draws_WB_real) +
   geom_density(aes(bias_prior, fill = "Prior"), alpha = 0.9) +
   geom_vline(xintercept = 0) + # true value of bias
   theme_bw() +
-  labs(title = "Bias posterior and prior",
+  labs(title = "Bias posterior and prior (WB model)",   
+        subtitle = "on real data", 
        x = "Bias",
        y = "Density")
 
@@ -492,7 +512,8 @@ plt2 <- ggplot(draws_WB_real) +
     geom_density(aes(w1_prior, fill = "Prior"), alpha = 0.9) +
     geom_vline(xintercept = 0.5) + # true value of bias
     theme_bw() +
-    labs(title = "w1 posterior and prior",
+    labs(title = "w1 posterior and prior (WB model)",
+            subtitle = "on real data",
          x = "w1",
          y = "Density")
 
@@ -501,7 +522,8 @@ plt3 <- ggplot(draws_WB_real) +
     geom_density(aes(w2_prior, fill = "Prior"), alpha = 0.9) +
     geom_vline(xintercept = 0.7) + # true value of bias
     theme_bw() +
-    labs(title = "w2 posterior and prior",
+    labs(title = "w2 posterior and prior (WB model)",
+            subtitle = "on real data",
          x = "w2",
          y = "Density")
 
@@ -512,3 +534,23 @@ ggsave("figures/Density_WB_real_data.png", plt4, width = 10, height = 10)
 ```
 
 Question: Postior is extremely off for w1 and w2. Look into this.
+
+
+
+# Model comparison
+"In this course, we rely on cross-validation based predictive performance (this chapter) and mixture models (next chapter). "
+
+
+Calculating the expected log predictive density of a model
+```{r}
+Loo_SB_fit_real_data <- SB_fit$loo(save_psis = TRUE, cores = 4)
+
+Loo_WB_fit_real_data <- WB_fit_real$loo(save_psis = TRUE, cores = 4)
+
+p1 <- plot(Loo_SB_fit_real_data)
+
+p2 <- plot(Loo_WB_fit_real_data)
+
+
+```
+
