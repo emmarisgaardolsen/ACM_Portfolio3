@@ -549,17 +549,32 @@ ggsave("figures/Density_WB_real_data.png", plt4, width = 10, height = 10)
 
 Calculating the expected log predictive density of a model
 ```{r}
-Loo_SB_fit_real_data <- SB_fit_real$loo(save_psis = TRUE, cores = 4)
-
+# plotting the loo for the WB model
 Loo_WB_fit_real_data <- WB_fit_real$loo(save_psis = TRUE, cores = 4)
-
-plot(Loo_SB_fit_real_data)
-
 plot(Loo_WB_fit_real_data)
 
-# save to drive
-ggsave("figures/Loo_WB_fit_real_data.png", plot(Loo_WB_fit_real_data), width = 10, height = 10)
+# Plotting the loo for the SB model
+Loo_SB_fit_real_data <- SB_fit_real$loo(save_psis = TRUE, cores = 4)
+plot(Loo_SB_fit_real_data)
 
+# Comparing the two models
+elpd_diff <- tibble(
+    n = seq(2598),
+    diff_elpd = 
+    Loo_WB_fit_real_data$pointwise[, "elpd_loo"] - 
+    Loo_SB_fit_real_data$pointwise[, "elpd_loo"]
+)
 
+p <- ggplot(elpd_diff, aes(x = n, y = diff_elpd)) +
+    geom_point(alpha = .1) +
+    geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+    theme_bw()
+p
+
+loo_compare(Loo_SB_fit_real_data, Loo_WB_fit_real_data)
+
+loo_model_weights(list(Loo_SB_fit_real_data, Loo_WB_fit_real_data))
 ```
+
+### Implementing cross validation
 
