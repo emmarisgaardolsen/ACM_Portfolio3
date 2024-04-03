@@ -7,7 +7,7 @@ date: "2024-03-22"
 # Assignment 3: Multilevel modelling
 
 ```{r setup}
-pacman::p_load(tidyverse, cmdstanr, brms)
+pacman::p_load(tidyverse, cmdstanr, brms, gridExtra)
 ```
 
 ## Introduction
@@ -61,7 +61,7 @@ WeightedBayes_f <- function(bias, Source1, Source2, w1, w2){
     w2 <- (w2 - 0.5)*2
     
     # Define or load the inv_logit_scaled and logit_scaled functions here
-    outcome <- inv_logit_scaled(bias + w1 * logit_scaled(Source1 / 8) + w2 * logit_scaled(Source2 / 8)) # 
+    outcome <- inv_logit_scaled(bias + w1 * logit_scaled(Source1) + w2 * logit_scaled(Source2)) # 
     return(outcome)
 }
 ```
@@ -71,12 +71,16 @@ WeightedBayes_f <- function(bias, Source1, Source2, w1, w2){
 trials <- 150
 participants <- 20
 ratings <- 1:8 # the participants can rate the faces from 1 to 8
-w1 <- .5 # the weight for own rating
-w2 <- .7 # the weight for group rating
+w1 <- 0.6 # the weight for own rating
+w2 <- 0.7 # the weight for group rating
 bias <- 0 # assuming no bias
 feedback <- c(-3, -2 ,0 ,2, 3) # the group rating is randomly chosen from this vector and subtracted from the first rating
 
 sim_data <- tibble()
+
+sim_data$w1 <- w1
+sim_data$w2 <- w2
+sim_data$bias <- bias
 
 for (participant in seq(participants)){ # for each participant
     for (i in seq(trials)) { # for each trial
@@ -90,9 +94,6 @@ for (participant in seq(participants)){ # for each participant
         ))
     }
 }
-sim_data$w1 <- w1
-sim_data$w2 <- w2
-sim_data$bias <- bias
 ```
 
 # Simulating data from 1) simple bayes model
@@ -114,17 +115,15 @@ for (participant in seq(participants)){ # for each participant
 for (participant in seq(participants)){ # for each participant
     for (i in seq(trials)) { # for each trial
         sim_data <- sim_data %>% 
-            mutate(SecondRating_belief_WB = WeightedBayes_f(bias, FirstRating, GroupRating, w1, w2)) %>% # WB = weighted bayes
+            mutate(SecondRating_belief_WB = WeightedBayes_f(bias, (FirstRating/8), (GroupRating/8), w1, w2)) %>% # WB = weighted bayes
             mutate(WB_binary_rating = ifelse(SecondRating_belief_WB > 0.5, 1, 0)) %>% # binary rating (either trustworthiness or not) Alternativ: rbinom(1,1,WB_binary_rating)
-            mutate(WB_number_rating = round(SecondRating_belief_WB * 8)) # number rating (1-8)
+            mutate(WB_number_rating = round(SecondRating_belief_WB * 8)) # number rating (1-8) - multiplying the belief back again
     }
 }
 ```
 
 # plotting the second choices for both models
 ```{r}
-pacman::p_load(gridExtra)
-
 plt1 <- ggplot(sim_data, aes(SecondRating_belief_SB)) +
     geom_histogram(bins = 10, alpha = 0.2, color = "black") +
     labs(title = "Simple Bayes model",
@@ -184,8 +183,6 @@ stan_data <- list(
     N = nrow(sim_data),
     Source1 = sim_data$FirstRating/8, # dividing by 8 to scale the ratings to 0-1 (probability scale)
     Source2 = sim_data$GroupRating/8, # dividing by 8 to scale the ratings to 0-1 (probability scale)
-    w1 = sim_data$w1,
-    w2 = sim_data$w2,
     bias = sim_data$bias,
     y = sim_data$SB_binary_rating
 )
@@ -254,20 +251,41 @@ file <- file.path("stan_models/WB_model.stan")
 WB_mod <- cmdstan_model(file, cpp_options = list(stan_threads = TRUE), stanc_options = list("O1"), pedantic = TRUE)
 ```
 
+```{r}
+# Data preparation
+stan_data <- list(
+    N = nrow(sim_data),
+    Source1 = pmin(sim_data$FirstRating/8, 0.999), # dividing by 8 to scale the ratings to 0-1 (probability scale), and using pmin to avoid exact 0/1
+    Source2 = pmin(sim_data$GroupRating/8, 0.999), # dividing by 8 to scale the ratings to 0-1 (probability scale)
+    y = sim_data$WB_binary_rating
+)
+
+# make a new dataframe, only for participant 1
+stan_data_participant1 <- sim_data %>% filter(participant == 1) %>% 
+    mutate(Source1 = pmin(FirstRating/8, 0.999), # dividing by 8 to scale the ratings to 0-1 (probability scale), and using pmin to avoid exact 0/1
+           Source2 = pmin(GroupRating/8, 0.999)) # dividing by 8 to scale the ratings to 0-1 (probability scale)
+
+# make it into list
+stan_data_participant1 <- list(
+    N = nrow(stan_data_participant1),
+    Source1 = stan_data_participant1$Source1,
+    Source2 = stan_data_participant1$Source2,
+    y = stan_data_participant1$WB_binary_rating
+)
+```
+
 Fitting model
 ```{r}
 WB_fit <- WB_mod$sample(
-    data = stan_data,
-    seed = 123,
-    chains = 2,
-    parallel_chains = 2,
-    threads_per_chain = 2,
-    iter_warmup = 2000,
-    iter_sampling = 2000,
-    refresh = 1000,
-    max_treedepth = 20, 
-    adapt_delta = 0.99 
-    )
+  data = stan_data_participant1,
+  seed = 123,
+  chains = 2,
+  parallel_chains = 2,
+  threads_per_chain = 2,
+  iter_warmup = 1500,
+  iter_sampling = 3000,
+  refresh = 500
+)
 ```
 
 Assessing WB fit
@@ -323,7 +341,6 @@ Plotting density of bias, w1, w2: prior and posterior
 plt1 <- ggplot(draws_WB) +
   geom_density(aes(bias, fill = "Posterior"), alpha = 0.9) +
   geom_density(aes(bias_prior, fill = "Prior"), alpha = 0.9) +
-  geom_vline(xintercept = sim_data$bias[1]) + # true value of bias
   theme_bw() +
   labs(title = "Bias posterior and prior (WB model)",
         subtitle = "on simulated data",
@@ -333,7 +350,6 @@ plt1 <- ggplot(draws_WB) +
 plt2 <- ggplot(draws_WB) +
     geom_density(aes(w1, fill = "Posterior"), alpha = 0.9) +
     geom_density(aes(w1_prior, fill = "Prior"), alpha = 0.9) +
-    geom_vline(xintercept = sim_data$w1[1]) + # true value of bias
     theme_bw() +
     labs(title = "w1 posterior and prior (WB model)",
         subtitle = "on simulated data",
@@ -343,7 +359,6 @@ plt2 <- ggplot(draws_WB) +
 plt3 <- ggplot(draws_WB) +
     geom_density(aes(w2, fill = "Posterior"), alpha = 0.9) +
     geom_density(aes(w2_prior, fill = "Prior"), alpha = 0.9) +
-    geom_vline(xintercept = sim_data$w2[1]) + # true value of bias
     theme_bw() +
     labs(title = "w2 posterior and prior (WB model)",
         subtitle = "on simulated data",
@@ -357,8 +372,6 @@ plt4 <- grid.arrange(plt1, plt2, plt3, nrow = 3)
 ggsave("figures/Density_WB_sim_data.png", plt4, width = 10, height = 10)
 ```
 
-Question: 
-Postior is extremely off for w1 and w2. Look into this.
 
 
 # Fitting model on actual cogsci data wuhu
@@ -370,8 +383,8 @@ df <- df %>% filter(GroupRating != 0) # cleaning up data (jvf. Riccardos comment
 
 stan_data_real <- list(
     N = nrow(df),
-    Source1 = pmin(pmax(df$FirstRating / 8, 0.01), 0.99), # Avoiding exact 0/1
-    Source2 = pmin(pmax(df$GroupRating / 8, 0.01), 0.99), # Avoiding exact 0/1
+    Source1 = pmin(pmax(df$FirstRating / 8, 0.0001), 0.9999), # Avoiding exact 0/1
+    Source2 = pmin(pmax(df$GroupRating / 8, 0.0001), 0.9999), # Avoiding exact 0/1
     y = df$Second_rating_binary
 )
 
@@ -379,7 +392,7 @@ stan_data_real <- list(
 
 Fitting to SB model
 ```{r}
-SB_fit <- SB_mod$sample(
+SB_fit_real <- SB_mod$sample(
     data = stan_data_real,
     seed = 123,
     chains = 2,
@@ -395,17 +408,17 @@ SB_fit <- SB_mod$sample(
 
 Assessing SB fit
 ```{r}
-SB_fit$summary()
+SB_fit_real$summary()
 
-SB_fit$cmdstan_diagnose()
+SB_fit_real$cmdstan_diagnose()
 
-SB_fit$loo()
+SB_fit_real$loo()
 ```
 
 Plotting SB fit
 ```{r}
 # Extracting draws
-draws_SB_real <- as_draws_df(SB_fit$draws())
+draws_SB_real <- as_draws_df(SB_fit_real$draws())
 
 # plotting markov chains for bias
 plt1 <- ggplot(draws_SB_real, aes(.iteration, bias, group = .chain, color = .chain)) +
@@ -420,7 +433,6 @@ plt1 <- ggplot(draws_SB_real, aes(.iteration, bias, group = .chain, color = .cha
 plt2 <- ggplot(draws_SB_real) +
   geom_density(aes(bias, fill = "Posterior"), alpha = 0.9) +
   geom_density(aes(bias_prior, fill = "Prior"), alpha = 0.9) +
-  geom_vline(xintercept = 0) + # true value of bias
   theme_bw() +
   labs(title = "Bias posterior and prior (SB model)",
         subtitle = "on real data",
@@ -500,7 +512,6 @@ Plotting density of bias, w1, w2: prior and posterior
 plt1 <- ggplot(draws_WB_real) +
   geom_density(aes(bias, fill = "Posterior"), alpha = 0.9) +
   geom_density(aes(bias_prior, fill = "Prior"), alpha = 0.9) +
-  geom_vline(xintercept = 0) + # true value of bias
   theme_bw() +
   labs(title = "Bias posterior and prior (WB model)",   
         subtitle = "on real data", 
@@ -510,7 +521,6 @@ plt1 <- ggplot(draws_WB_real) +
 plt2 <- ggplot(draws_WB_real) +
     geom_density(aes(w1, fill = "Posterior"), alpha = 0.9) +
     geom_density(aes(w1_prior, fill = "Prior"), alpha = 0.9) +
-    geom_vline(xintercept = 0.5) + # true value of bias
     theme_bw() +
     labs(title = "w1 posterior and prior (WB model)",
             subtitle = "on real data",
@@ -520,7 +530,6 @@ plt2 <- ggplot(draws_WB_real) +
 plt3 <- ggplot(draws_WB_real) +
     geom_density(aes(w2, fill = "Posterior"), alpha = 0.9) +
     geom_density(aes(w2_prior, fill = "Prior"), alpha = 0.9) +
-    geom_vline(xintercept = 0.7) + # true value of bias
     theme_bw() +
     labs(title = "w2 posterior and prior (WB model)",
             subtitle = "on real data",
@@ -533,9 +542,6 @@ plt4 <- grid.arrange(plt1, plt2, plt3, nrow = 3)
 ggsave("figures/Density_WB_real_data.png", plt4, width = 10, height = 10)
 ```
 
-Question: Postior is extremely off for w1 and w2. Look into this.
-
-
 
 # Model comparison
 "In this course, we rely on cross-validation based predictive performance (this chapter) and mixture models (next chapter). "
@@ -543,13 +549,16 @@ Question: Postior is extremely off for w1 and w2. Look into this.
 
 Calculating the expected log predictive density of a model
 ```{r}
-Loo_SB_fit_real_data <- SB_fit$loo(save_psis = TRUE, cores = 4)
+Loo_SB_fit_real_data <- SB_fit_real$loo(save_psis = TRUE, cores = 4)
 
 Loo_WB_fit_real_data <- WB_fit_real$loo(save_psis = TRUE, cores = 4)
 
-p1 <- plot(Loo_SB_fit_real_data)
+plot(Loo_SB_fit_real_data)
 
-p2 <- plot(Loo_WB_fit_real_data)
+plot(Loo_WB_fit_real_data)
+
+# save to drive
+ggsave("figures/Loo_WB_fit_real_data.png", plot(Loo_WB_fit_real_data), width = 10, height = 10)
 
 
 ```
