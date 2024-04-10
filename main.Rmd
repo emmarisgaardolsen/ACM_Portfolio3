@@ -47,12 +47,8 @@ The choices of trustworthiness are not independent of each other, but are influe
 # Two agents: Simple and weighted Bayes
 ```{r agents}
 # Function to make sure the denominator is never 0 (which produces NaN since you can't divide by 0.
-logit_scaled <- function(p) {
-  log(p / (1 - p + 1e-9))
-}
-
 simpleBayes_f <- function(bias, Source1, Source2){
-    outcome <- inv_logit_scaled(bias + logit_scaled(Source1 / 8) + logit_scaled(Source2 / 8)) # dividing by 8 to scale the ratings to 0-1 (probability scale)
+    outcome <- inv_logit_scaled(bias + logit_scaled(Source1 / 9) + logit_scaled(Source2 / 9)) # dividing by 8 to scale the ratings to 0-1 (probability scale)
     return(outcome)
 }
 
@@ -115,7 +111,7 @@ for (participant in seq(participants)){ # for each participant
 for (participant in seq(participants)){ # for each participant
     for (i in seq(trials)) { # for each trial
         sim_data <- sim_data %>% 
-            mutate(SecondRating_belief_WB = WeightedBayes_f(bias, (FirstRating/8), (GroupRating/8), w1, w2)) %>% # WB = weighted bayes
+            mutate(SecondRating_belief_WB = WeightedBayes_f(bias, (FirstRating/9), (GroupRating/9), w1, w2)) %>% # WB = weighted bayes
             mutate(WB_binary_rating = ifelse(SecondRating_belief_WB > 0.5, 1, 0)) %>% # binary rating (either trustworthiness or not) Alternativ: rbinom(1,1,WB_binary_rating)
             mutate(WB_number_rating = round(SecondRating_belief_WB * 8)) # number rating (1-8) - multiplying the belief back again
     }
@@ -385,7 +381,6 @@ stan_data_real <- list(
     Source2 = pmin(pmax(df$GroupRating / 8, 0.0001), 0.9999), # Avoiding exact 0/1
     y = df$Second_rating_binary
 )
-
 ```
 
 Fitting to SB model
@@ -411,6 +406,13 @@ SB_fit_real$summary()
 SB_fit_real$cmdstan_diagnose()
 
 SB_fit_real$loo()
+```
+
+```{r}
+# dataset
+sd(df$GroupRating)
+
+
 ```
 
 Plotting SB fit
@@ -581,7 +583,7 @@ ggsave("figures/loo_comparison.png", loo_comparison_plt, width = 10, height = 10
 loo_compare(Loo_WB_fit_real_data,Loo_SB_fit_real_data)
 ```
 **Interpretation**
-The loo_compare compares models based on their expected log predictive densities (ELPDs). The ELPD is a measure of the model's predictive accuracy, with higher values indicating better predictive accuracy.
+The loo_compare compares models based on their Expected Log Predictive Densities (ELPDs). The ELPD is a measure of the model's predictive accuracy, with higher values indicating better predictive accuracy.
 
 Output:
        elpd_diff se_diff
@@ -603,5 +605,10 @@ model2 (Loo_WB_fit_real_data) has a weight of 0.974. This means that there's a 9
 
 Overall, model 2 is way more likely to make the best predictions on new data compared to model 1.
 
-### Implementing cross validation
+Output:
+       weight
+model1 0.026 (simpleBayes)
+model2 0.974 (WeightedBayes)
 
+
+### Implementing cross validation
