@@ -156,9 +156,7 @@ plt4 <- ggplot(sim_data, aes(FirstRating, SecondRating_belief_WB, color = GroupR
          y = "Second rating") +
     theme_bw()
 
-grid.arrange(plt1, plt2, pl3, plt4, ncol = 2, nrow = 2)
 plt5 <- grid.arrange(plt1, plt2, pl3, plt4, ncol = 2, nrow = 2)
-
 
 # save to drive
 ggsave("figures/SecondChoice_Sim_Data.png", plt5, width = 10, height = 10)
@@ -551,11 +549,14 @@ Calculating the expected log predictive density of a model
 ```{r}
 # plotting the loo for the WB model
 Loo_WB_fit_real_data <- WB_fit_real$loo(save_psis = TRUE, cores = 4)
-plot(Loo_WB_fit_real_data)
+loo_plt1 <- plot(Loo_WB_fit_real_data)
+ggsave("figures/Loo_WB_real_data.png", loo_plt1, width = 10, height = 10)
+
 
 # Plotting the loo for the SB model
 Loo_SB_fit_real_data <- SB_fit_real$loo(save_psis = TRUE, cores = 4)
-plot(Loo_SB_fit_real_data)
+loo_plt2 <- plot(Loo_SB_fit_real_data)
+ggsave("figures/Loo_SB_real_data.png", loo_plt2, width = 10, height = 10)
 
 # Comparing the two models
 elpd_diff <- tibble(
@@ -565,16 +566,42 @@ elpd_diff <- tibble(
     Loo_SB_fit_real_data$pointwise[, "elpd_loo"]
 )
 
-p <- ggplot(elpd_diff, aes(x = n, y = diff_elpd)) +
+loo_comparison_plt <- ggplot(elpd_diff, aes(x = n, y = diff_elpd)) +
     geom_point(alpha = .1) +
     geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
     theme_bw()
-p
 
-loo_compare(Loo_SB_fit_real_data, Loo_WB_fit_real_data)
+loo_comparison_plt
+ggsave("figures/loo_comparison.png", loo_comparison_plt, width = 10, height = 10)
 
+```
+
+```{r}
+# comparing the two models
+loo_compare(Loo_WB_fit_real_data,Loo_SB_fit_real_data)
+```
+**Interpretation**
+The loo_compare compares models based on their expected log predictive densities (ELPDs). The ELPD is a measure of the model's predictive accuracy, with higher values indicating better predictive accuracy.
+
+Output:
+       elpd_diff se_diff
+model1    0.0       0.0 
+model2 -696.1      68.3 
+
+model1 (which corresponds to Loo_SB_fit_real_data) has an elpd_diff of -696.1. This means that the expected log predictive density of model1 is 696.1 units lower than that of model2. In other words, model2 is expected to have better predictive accuracy than model1 by 696.1 units.
+
+based on this output, model2 (or Loo_WB_fit_real_data) is expected to have better predictive accuracy than model1 (or Loo_SB_fit_real_data), and the difference is statistically significant given the large magnitude of the difference compared to the standard error.
+
+```{r}
+# model weights
 loo_model_weights(list(Loo_SB_fit_real_data, Loo_WB_fit_real_data))
 ```
+**Interpretation**
+model1 (Loo_SB_fit_real_data) has a weight of 0.026. This means that, given the data and models we have, there's a 2.6% chance that this model will make the best predictions on new data.
+
+model2 (Loo_WB_fit_real_data) has a weight of 0.974. This means that there's a 97.4% chance that this model will make the best predictions on new data.
+
+Overall, model 2 is way more likely to make the best predictions on new data compared to model 1.
 
 ### Implementing cross validation
 
