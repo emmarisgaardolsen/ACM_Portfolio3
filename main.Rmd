@@ -401,18 +401,14 @@ SB_fit_real <- SB_mod$sample(
 
 Assessing SB fit
 ```{r}
-SB_fit_real$summary()
+print("Printing summary of fit for SB model")
+print(SB_fit_real$summary())
 
-SB_fit_real$cmdstan_diagnose()
+print("Printing diagnose of fit for SB model")
+print(SB_fit_real$cmdstan_diagnose())
 
-SB_fit_real$loo()
-```
-
-```{r}
-# dataset
-sd(df$GroupRating)
-
-
+print("Printing loo for SB model")
+print(SB_fit_real$loo())
 ```
 
 Plotting SB fit
@@ -549,16 +545,19 @@ ggsave("figures/Density_WB_real_data.png", plt4, width = 10, height = 10)
 
 Calculating the expected log predictive density of a model
 ```{r}
+# plotting the loo for the SB model
+Loo_SB_fit_real_data <- SB_fit_real$loo(save_psis = TRUE, cores = 4)
+
+loo_plt1 <- plot(Loo_SB_fit_real_data)
+ggsave("figures/Loo_SB_real_data.png", loo_plt, width = 10, height = 10)
+
 # plotting the loo for the WB model
 Loo_WB_fit_real_data <- WB_fit_real$loo(save_psis = TRUE, cores = 4)
-loo_plt1 <- plot(Loo_WB_fit_real_data)
-ggsave("figures/Loo_WB_real_data.png", loo_plt1, width = 10, height = 10)
 
-
-# Plotting the loo for the SB model
-Loo_SB_fit_real_data <- SB_fit_real$loo(save_psis = TRUE, cores = 4)
-loo_plt2 <- plot(Loo_SB_fit_real_data)
+loo_plt2 <- plot(Loo_WB_fit_real_data)
 ggsave("figures/Loo_SB_real_data.png", loo_plt2, width = 10, height = 10)
+
+
 
 # Comparing the two models
 elpd_diff <- tibble(
@@ -568,12 +567,18 @@ elpd_diff <- tibble(
     Loo_SB_fit_real_data$pointwise[, "elpd_loo"]
 )
 
+
+
 loo_comparison_plt <- ggplot(elpd_diff, aes(x = n, y = diff_elpd)) +
     geom_point(alpha = .1) +
     geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+    labs(title = "Comparison of ELPD_LOO between SB and WB model (WB - SB)",
+         x = "Observation",
+         y = "Difference in ELPD_LOO") +
     theme_bw()
 
 loo_comparison_plt
+
 ggsave("figures/loo_comparison.png", loo_comparison_plt, width = 10, height = 10)
 
 ```
@@ -596,14 +601,14 @@ based on this output, model2 (or Loo_WB_fit_real_data) is expected to have bette
 
 ```{r}
 # model weights
-loo_model_weights(list(Loo_SB_fit_real_data, Loo_WB_fit_real_data))
+loo_model_weights(list(Loo_WB_fit_real_data, Loo_SB_fit_real_data))
 ```
 **Interpretation**
 model1 (Loo_SB_fit_real_data) has a weight of 0.026. This means that, given the data and models we have, there's a 2.6% chance that this model will make the best predictions on new data.
 
 model2 (Loo_WB_fit_real_data) has a weight of 0.974. This means that there's a 97.4% chance that this model will make the best predictions on new data.
 
-Overall, model 2 is way more likely to make the best predictions on new data compared to model 1.
+
 
 Output:
        weight
